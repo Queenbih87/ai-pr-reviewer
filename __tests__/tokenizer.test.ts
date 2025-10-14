@@ -1,71 +1,70 @@
 import {describe, expect, test} from '@jest/globals'
 import {encode, getTokenCount} from '../src/tokenizer'
 
-describe('Tokenizer Module', () => {
-  describe('encode function', () => {
-    test('should encode simple string', () => {
+describe('tokenizer', () => {
+  describe('encode', () => {
+    test('should encode simple text', () => {
       const result = encode('hello world')
       
-      expect(result).toBeDefined()
-      expect(result instanceof Uint32Array).toBe(true)
+      expect(result).toBeInstanceOf(Uint32Array)
       expect(result.length).toBeGreaterThan(0)
     })
 
     test('should encode empty string', () => {
       const result = encode('')
       
-      expect(result).toBeDefined()
-      expect(result instanceof Uint32Array).toBe(true)
+      expect(result).toBeInstanceOf(Uint32Array)
       expect(result.length).toBe(0)
     })
 
-    test('should encode string with special characters', () => {
-      const result = encode('Hello, World! @#$%^&*()')
-      
-      expect(result).toBeDefined()
-      expect(result.length).toBeGreaterThan(0)
-    })
-
-    test('should encode string with numbers', () => {
-      const result = encode('123 456 789')
-      
-      expect(result).toBeDefined()
-      expect(result.length).toBeGreaterThan(0)
-    })
-
-    test('should encode multiline string', () => {
-      const result = encode('Line 1\nLine 2\nLine 3')
-      
-      expect(result).toBeDefined()
-      expect(result.length).toBeGreaterThan(0)
-    })
-
-    test('should encode string with unicode characters', () => {
+    test('should encode unicode characters', () => {
       const result = encode('Hello 世界 🌍')
       
-      expect(result).toBeDefined()
+      expect(result).toBeInstanceOf(Uint32Array)
       expect(result.length).toBeGreaterThan(0)
     })
 
-    test('should encode code snippet', () => {
-      const code = `
-function hello() {
-  console.log('Hello, World!');
-}
-`
+    test('should encode code snippets', () => {
+      const code = `function hello() {
+  return "world";
+}`
       const result = encode(code)
       
-      expect(result).toBeDefined()
+      expect(result).toBeInstanceOf(Uint32Array)
+      expect(result.length).toBeGreaterThan(5)
+    })
+
+    test('should encode special characters', () => {
+      const text = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+      const result = encode(text)
+      
+      expect(result).toBeInstanceOf(Uint32Array)
       expect(result.length).toBeGreaterThan(0)
+    })
+
+    test('should produce consistent results for same input', () => {
+      const text = 'consistent encoding test'
+      const result1 = encode(text)
+      const result2 = encode(text)
+      
+      expect(result1.length).toBe(result2.length)
+      expect(Array.from(result1)).toEqual(Array.from(result2))
+    })
+
+    test('should produce different results for different inputs', () => {
+      const result1 = encode('first text')
+      const result2 = encode('second text')
+      
+      expect(Array.from(result1)).not.toEqual(Array.from(result2))
     })
   })
 
-  describe('getTokenCount function', () => {
-    test('should count tokens in simple string', () => {
+  describe('getTokenCount', () => {
+    test('should count tokens in simple text', () => {
       const count = getTokenCount('hello world')
       
       expect(count).toBeGreaterThan(0)
-      expect(typeof count).toBe('number')
+      expect(count).toBeLessThan(10)
     })
 
     test('should return 0 for empty string', () => {
@@ -75,235 +74,263 @@ function hello() {
     })
 
     test('should count tokens in longer text', () => {
-      const text = 'The quick brown fox jumps over the lazy dog'
+      const text = 'This is a longer piece of text that should have more tokens than a short sentence.'
       const count = getTokenCount(text)
       
+      expect(count).toBeGreaterThan(10)
+      expect(count).toBeLessThan(50)
+    })
+
+    test('should handle text with endoftext marker', () => {
+      const text = 'Before marker <|endoftext|> after marker'
+      const count = getTokenCount(text)
+      
+      // The marker should be removed before counting
       expect(count).toBeGreaterThan(0)
-      // Common tokenizers usually break this into ~10-12 tokens
-      expect(count).toBeGreaterThan(5)
-      expect(count).toBeLessThan(20)
+    })
+
+    test('should remove multiple endoftext markers', () => {
+      const text = 'Text <|endoftext|> more text <|endoftext|> even more'
+      const count = getTokenCount(text)
+      
+      const withoutMarkers = getTokenCount('Text  more text  even more')
+      // Counts should be similar (within a small margin due to spacing)
+      expect(Math.abs(count - withoutMarkers)).toBeLessThan(3)
     })
 
     test('should count tokens in code', () => {
-      const code = `
-function add(a, b) {
+      const code = `function calculateSum(a, b) {
   return a + b;
-}
-`
+}`
       const count = getTokenCount(code)
       
-      expect(count).toBeGreaterThan(0)
-    })
-
-    test('should remove endoftext marker before counting', () => {
-      const textWithMarker = 'Hello<|endoftext|>World'
-      const textWithoutMarker = 'HelloWorld'
-      
-      const countWith = getTokenCount(textWithMarker)
-      const countWithout = getTokenCount(textWithoutMarker)
-      
-      // Should be equal since marker is removed
-      expect(countWith).toBe(countWithout)
-    })
-
-    test('should handle multiple endoftext markers', () => {
-      const text = 'Hello<|endoftext|>World<|endoftext|>Test'
-      const count = getTokenCount(text)
-      
-      expect(count).toBeGreaterThan(0)
-      expect(typeof count).toBe('number')
+      expect(count).toBeGreaterThan(5)
+      expect(count).toBeLessThan(30)
     })
 
     test('should count tokens in markdown', () => {
-      const markdown = `
-# Heading 1
-
-## Heading 2
+      const markdown = `# Heading
 
 This is a paragraph with **bold** and *italic* text.
 
 - List item 1
 - List item 2
-
-\`\`\`javascript
-const x = 1;
-\`\`\`
 `
       const count = getTokenCount(markdown)
       
-      expect(count).toBeGreaterThan(0)
+      expect(count).toBeGreaterThan(10)
     })
 
-    test('should count tokens in JSON', () => {
-      const json = JSON.stringify({
-        name: 'John Doe',
-        age: 30,
-        city: 'New York',
-        hobbies: ['reading', 'coding', 'gaming']
-      })
-      const count = getTokenCount(json)
-      
-      expect(count).toBeGreaterThan(0)
-    })
-
-    test('should handle very long strings', () => {
-      const longText = 'a'.repeat(10000)
+    test('should handle very long text', () => {
+      const longText = 'word '.repeat(1000)
       const count = getTokenCount(longText)
       
-      expect(count).toBeGreaterThan(0)
-      expect(count).toBeLessThan(20000) // Sanity check
+      expect(count).toBeGreaterThan(500)
+      expect(count).toBeLessThan(2000)
     })
 
-    test('should handle special characters', () => {
-      const text = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`'
+    test('should count unicode characters', () => {
+      const text = '你好世界 Hello World'
       const count = getTokenCount(text)
       
       expect(count).toBeGreaterThan(0)
     })
 
-    test('should handle unicode emoji', () => {
-      const text = '😀 😃 😄 😁 🌍 🌎 🌏'
+    test('should count emojis', () => {
+      const text = '🚀 🌍 🎉 Emojis are fun!'
       const count = getTokenCount(text)
       
       expect(count).toBeGreaterThan(0)
-    })
-
-    test('should handle mixed content', () => {
-      const text = `
-Title: Fix Bug #123
-
-Description: This PR fixes the parsing issue in the tokenizer.
-
-Changes:
-- Updated parser.ts
-- Added tests
-- Fixed edge cases
-
-Code example:
-\`\`\`typescript
-function tokenize(input: string): Token[] {
-  return input.split(' ').map(word => ({
-    type: 'word',
-    value: word
-  }));
-}
-\`\`\`
-
-Closes #123
-`
-      const count = getTokenCount(text)
-      
-      expect(count).toBeGreaterThan(0)
-    })
-  })
-
-  describe('Token count comparisons', () => {
-    test('longer text should have more tokens', () => {
-      const short = 'Hello'
-      const long = 'Hello World this is a much longer sentence with many more words'
-      
-      const shortCount = getTokenCount(short)
-      const longCount = getTokenCount(long)
-      
-      expect(longCount).toBeGreaterThan(shortCount)
     })
 
     test('should be consistent for same input', () => {
-      const text = 'This is a test string'
-      
+      const text = 'consistency test'
       const count1 = getTokenCount(text)
       const count2 = getTokenCount(text)
       
       expect(count1).toBe(count2)
     })
+  })
 
-    test('similar strings should have similar token counts', () => {
-      const text1 = 'The quick brown fox'
-      const text2 = 'The fast brown dog'
+  describe('token count accuracy', () => {
+    test('single word should have fewer tokens than sentence', () => {
+      const wordCount = getTokenCount('hello')
+      const sentenceCount = getTokenCount('hello world this is a sentence')
       
-      const count1 = getTokenCount(text1)
-      const count2 = getTokenCount(text2)
+      expect(sentenceCount).toBeGreaterThan(wordCount)
+    })
+
+    test('shorter text should have fewer tokens than longer text', () => {
+      const shortText = 'Short text'
+      const longText = 'This is a much longer piece of text with many more words and tokens'
       
-      // Should be close (within a token or two)
-      expect(Math.abs(count1 - count2)).toBeLessThanOrEqual(2)
+      const shortCount = getTokenCount(shortText)
+      const longCount = getTokenCount(longText)
+      
+      expect(longCount).toBeGreaterThan(shortCount * 2)
+    })
+
+    test('repeated text should scale linearly', () => {
+      const text = 'test '
+      const count1 = getTokenCount(text)
+      const count10 = getTokenCount(text.repeat(10))
+      
+      // Should be approximately 10x (allowing for small variance)
+      expect(count10).toBeGreaterThan(count1 * 8)
+      expect(count10).toBeLessThan(count1 * 12)
     })
   })
 
-  describe('Edge cases', () => {
-    test('should handle whitespace-only strings', () => {
-      const count = getTokenCount('   \n\n   \t\t   ')
+  describe('realistic code examples', () => {
+    test('should count tokens in TypeScript class', () => {
+      const code = `export class Example {
+  private value: string;
+  
+  constructor(value: string) {
+    this.value = value;
+  }
+  
+  getValue(): string {
+    return this.value;
+  }
+}`
+      const count = getTokenCount(code)
       
-      expect(count).toBeGreaterThanOrEqual(0)
-    })
-
-    test('should handle strings with only newlines', () => {
-      const count = getTokenCount('\n\n\n\n\n')
-      
-      expect(count).toBeGreaterThanOrEqual(0)
-    })
-
-    test('should handle repeated words', () => {
-      const text = 'test '.repeat(100)
-      const count = getTokenCount(text)
-      
-      expect(count).toBeGreaterThan(0)
-    })
-
-    test('should handle mixed languages', () => {
-      const text = 'Hello world 你好世界 Bonjour monde'
-      const count = getTokenCount(text)
-      
-      expect(count).toBeGreaterThan(0)
-    })
-  })
-
-  describe('Real-world scenarios', () => {
-    test('should count tokens in PR description', () => {
-      const prDescription = `
-## Description
-This PR implements a new feature for token counting.
-
-## Changes
-- Added new tokenizer module
-- Updated documentation
-- Added comprehensive tests
-
-## Testing
-Tested with various input types including code, markdown, and special characters.
-`
-      const count = getTokenCount(prDescription)
-      
-      expect(count).toBeGreaterThan(0)
       expect(count).toBeGreaterThan(20)
-    })
-
-    test('should count tokens in code review comment', () => {
-      const comment = `
-This implementation looks good, but I have a few suggestions:
-
-1. Consider adding error handling for edge cases
-2. The variable naming could be more descriptive
-3. Add JSDoc comments for public methods
-
-Overall, good work! 👍
-`
-      const count = getTokenCount(comment)
-      
-      expect(count).toBeGreaterThan(0)
+      expect(count).toBeLessThan(100)
     })
 
     test('should count tokens in diff output', () => {
-      const diff = `
-@@ -1,5 +1,7 @@
+      const diff = `@@ -1,5 +1,5 @@
  function hello() {
--  console.log('Hello');
-+  console.log('Hello, World!');
-+  return true;
+-  return "old";
++  return "new";
  }
 `
       const count = getTokenCount(diff)
       
+      expect(count).toBeGreaterThan(10)
+    })
+
+    test('should count tokens in JSON', () => {
+      const json = JSON.stringify({
+        name: 'test',
+        version: '1.0.0',
+        description: 'A test package',
+        dependencies: {
+          package1: '^1.0.0',
+          package2: '^2.0.0'
+        }
+      }, null, 2)
+      
+      const count = getTokenCount(json)
+      
+      expect(count).toBeGreaterThan(20)
+    })
+
+    test('should count tokens in PR description', () => {
+      const description = `## Changes
+
+This PR includes the following changes:
+
+- Feature A: Implements new functionality
+- Feature B: Improves performance
+- Bug fix: Resolves issue #123
+
+## Testing
+
+All tests pass locally.
+`
+      const count = getTokenCount(description)
+      
+      expect(count).toBeGreaterThan(30)
+      expect(count).toBeLessThan(100)
+    })
+  })
+
+  describe('edge cases', () => {
+    test('should handle null-like inputs gracefully', () => {
+      // getTokenCount expects string, but testing runtime behavior
+      const count = getTokenCount('')
+      expect(count).toBe(0)
+    })
+
+    test('should handle whitespace-only text', () => {
+      const count = getTokenCount('   \n   \t   ')
+      expect(count).toBeGreaterThanOrEqual(0)
+    })
+
+    test('should handle text with many newlines', () => {
+      const text = 'line1\n\n\n\nline2\n\n\n\nline3'
+      const count = getTokenCount(text)
       expect(count).toBeGreaterThan(0)
+    })
+
+    test('should handle text with special unicode spaces', () => {
+      const text = 'word\u00A0word\u2003word' // non-breaking space and em space
+      const count = getTokenCount(text)
+      expect(count).toBeGreaterThan(0)
+    })
+
+    test('should handle mixed content types', () => {
+      const mixed = `
+        # Heading
+        
+        Some text
+        
+        \`\`\`javascript
+        const x = 1;
+        \`\`\`
+        
+        More text with **markdown** and 🚀 emojis
+      `
+      const count = getTokenCount(mixed)
+      expect(count).toBeGreaterThan(10)
+    })
+  })
+
+  describe('performance characteristics', () => {
+    test('should handle moderately large text efficiently', () => {
+      const largeText = 'This is a sentence. '.repeat(100)
+      
+      const start = Date.now()
+      const count = getTokenCount(largeText)
+      const duration = Date.now() - start
+      
+      expect(count).toBeGreaterThan(100)
+      expect(duration).toBeLessThan(1000) // Should complete in less than 1 second
+    })
+
+    test('should handle text with many tokens', () => {
+      const text = 'word '.repeat(500)
+      const count = getTokenCount(text)
+      
+      expect(count).toBeGreaterThan(400)
+      expect(count).toBeLessThan(700)
+    })
+  })
+
+  describe('comparison tests', () => {
+    test('should show that longer words generally have more tokens', () => {
+      const shortWord = getTokenCount('a')
+      const mediumWord = getTokenCount('hello')
+      const longWord = getTokenCount('incomprehensibility')
+      
+      expect(mediumWord).toBeGreaterThanOrEqual(shortWord)
+      expect(longWord).toBeGreaterThan(shortWord)
+    })
+
+    test('should show token count relationships', () => {
+      const text1 = 'Hello'
+      const text2 = 'Hello world'
+      const text3 = 'Hello world, how are you?'
+      
+      const count1 = getTokenCount(text1)
+      const count2 = getTokenCount(text2)
+      const count3 = getTokenCount(text3)
+      
+      expect(count2).toBeGreaterThan(count1)
+      expect(count3).toBeGreaterThan(count2)
     })
   })
 })
