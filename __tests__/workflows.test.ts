@@ -1,4 +1,4 @@
-import {describe, expect, test} from '@jest/globals'
+__tests__/workflows.test.tsimport {describe, expect, test} from '@jest/globals'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
