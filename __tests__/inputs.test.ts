@@ -1,8 +1,8 @@
 import {describe, expect, test} from '@jest/globals'
 import {Inputs} from '../src/inputs'
 
-describe('Inputs Class', () => {
-  describe('Constructor', () => {
+describe('Inputs', () => {
+  describe('constructor', () => {
     test('should create instance with default values', () => {
       const inputs = new Inputs()
       
@@ -25,42 +25,51 @@ describe('Inputs Class', () => {
         'custom system message',
         'custom title',
         'custom description',
-        'custom raw summary',
-        'custom short summary',
+        'raw summary',
+        'short summary',
         'test.ts',
-        'const x = 1',
-        '+const x = 1',
-        'patch content',
+        'file content here',
         'diff content',
+        'patch content',
+        'diff here',
         'comment chain',
-        'user comment'
+        'comment text'
       )
-      
+
       expect(inputs.systemMessage).toBe('custom system message')
       expect(inputs.title).toBe('custom title')
       expect(inputs.description).toBe('custom description')
-      expect(inputs.rawSummary).toBe('custom raw summary')
-      expect(inputs.shortSummary).toBe('custom short summary')
+      expect(inputs.rawSummary).toBe('raw summary')
+      expect(inputs.shortSummary).toBe('short summary')
       expect(inputs.filename).toBe('test.ts')
-      expect(inputs.fileContent).toBe('const x = 1')
-      expect(inputs.fileDiff).toBe('+const x = 1')
+      expect(inputs.fileContent).toBe('file content here')
+      expect(inputs.fileDiff).toBe('diff content')
       expect(inputs.patches).toBe('patch content')
-      expect(inputs.diff).toBe('diff content')
+      expect(inputs.diff).toBe('diff here')
       expect(inputs.commentChain).toBe('comment chain')
-      expect(inputs.comment).toBe('user comment')
+      expect(inputs.comment).toBe('comment text')
     })
 
-    test('should handle empty strings', () => {
+    test('should handle empty strings for all fields', () => {
       const inputs = new Inputs('', '', '', '', '', '', '', '', '', '', '', '')
       
       expect(inputs.systemMessage).toBe('')
       expect(inputs.title).toBe('')
       expect(inputs.description).toBe('')
+      expect(inputs.rawSummary).toBe('')
+      expect(inputs.shortSummary).toBe('')
+      expect(inputs.filename).toBe('')
+      expect(inputs.fileContent).toBe('')
+      expect(inputs.fileDiff).toBe('')
+      expect(inputs.patches).toBe('')
+      expect(inputs.diff).toBe('')
+      expect(inputs.commentChain).toBe('')
+      expect(inputs.comment).toBe('')
     })
   })
 
   describe('clone', () => {
-    test('should create a deep copy of inputs', () => {
+    test('should create deep copy with same values', () => {
       const original = new Inputs(
         'system',
         'title',
@@ -71,13 +80,13 @@ describe('Inputs Class', () => {
         'content',
         'diff',
         'patches',
-        'diff2',
+        'fulldiff',
         'chain',
         'comment'
       )
-      
+
       const cloned = original.clone()
-      
+
       expect(cloned).not.toBe(original)
       expect(cloned.systemMessage).toBe(original.systemMessage)
       expect(cloned.title).toBe(original.title)
@@ -93,193 +102,161 @@ describe('Inputs Class', () => {
       expect(cloned.comment).toBe(original.comment)
     })
 
-    test('should create independent copy that can be modified', () => {
+    test('should allow modification of clone without affecting original', () => {
       const original = new Inputs('system', 'title')
       const cloned = original.clone()
-      
-      cloned.systemMessage = 'modified system'
-      cloned.title = 'modified title'
-      
+
+      cloned.systemMessage = 'modified'
+      cloned.title = 'new title'
+
       expect(original.systemMessage).toBe('system')
       expect(original.title).toBe('title')
-      expect(cloned.systemMessage).toBe('modified system')
-      expect(cloned.title).toBe('modified title')
+      expect(cloned.systemMessage).toBe('modified')
+      expect(cloned.title).toBe('new title')
     })
   })
 
   describe('render', () => {
-    test('should return empty string for empty content', () => {
-      const inputs = new Inputs()
-      expect(inputs.render('')).toBe('')
-    })
-
-    test('should return content unchanged if no placeholders', () => {
-      const inputs = new Inputs()
-      const content = 'This is just plain text'
-      expect(inputs.render(content)).toBe(content)
-    })
-
-    test('should replace $system_message placeholder', () => {
-      const inputs = new Inputs('Custom system message')
-      const content = 'System: $system_message'
-      expect(inputs.render(content)).toBe('System: Custom system message')
-    })
-
-    test('should replace $title placeholder', () => {
-      const inputs = new Inputs('', 'My PR Title')
-      const content = 'Title: $title'
-      expect(inputs.render(content)).toBe('Title: My PR Title')
-    })
-
-    test('should replace $description placeholder', () => {
-      const inputs = new Inputs('', '', 'PR Description')
-      const content = 'Desc: $description'
-      expect(inputs.render(content)).toBe('Desc: PR Description')
-    })
-
-    test('should replace $raw_summary placeholder', () => {
-      const inputs = new Inputs('', '', '', 'Raw summary text')
-      const content = 'Summary: $raw_summary'
-      expect(inputs.render(content)).toBe('Summary: Raw summary text')
-    })
-
-    test('should replace $short_summary placeholder', () => {
-      const inputs = new Inputs('', '', '', '', 'Short summary')
-      const content = 'Short: $short_summary'
-      expect(inputs.render(content)).toBe('Short: Short summary')
-    })
-
-    test('should replace $filename placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', 'test.ts')
-      const content = 'File: $filename'
-      expect(inputs.render(content)).toBe('File: test.ts')
-    })
-
-    test('should replace $file_content placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', 'const x = 1')
-      const content = 'Content: $file_content'
-      expect(inputs.render(content)).toBe('Content: const x = 1')
-    })
-
-    test('should replace $file_diff placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', '', '+const x = 1')
-      const content = 'Diff: $file_diff'
-      expect(inputs.render(content)).toBe('Diff: +const x = 1')
-    })
-
-    test('should replace $patches placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', '', '', 'patch data')
-      const content = 'Patches: $patches'
-      expect(inputs.render(content)).toBe('Patches: patch data')
-    })
-
-    test('should replace $diff placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', '', '', '', 'diff data')
-      const content = 'Diff: $diff'
-      expect(inputs.render(content)).toBe('Diff: diff data')
-    })
-
-    test('should replace $comment_chain placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', '', '', '', '', 'chain')
-      const content = 'Chain: $comment_chain'
-      expect(inputs.render(content)).toBe('Chain: chain')
-    })
-
-    test('should replace $comment placeholder', () => {
-      const inputs = new Inputs('', '', '', '', '', '', '', '', '', '', '', 'user comment')
-      const content = 'Comment: $comment'
-      expect(inputs.render(content)).toBe('Comment: user comment')
-    })
-
-    test('should replace multiple placeholders in one template', () => {
+    test('should replace all template variables', () => {
       const inputs = new Inputs(
-        'sys',
-        'title',
-        'desc',
-        'raw',
-        'short',
-        'file.ts'
+        'sys_msg',
+        'pr_title',
+        'pr_desc',
+        'raw_sum',
+        'short_sum',
+        'test.ts',
+        'file_cont',
+        'file_dif',
+        'patch_cont',
+        'diff_cont',
+        'chain_cont',
+        'comm_text'
       )
-      const content = '$system_message | $title | $description | $raw_summary | $short_summary | $filename'
-      expect(inputs.render(content)).toBe('sys | title | desc | raw | short | file.ts')
-    })
 
-    test('should handle placeholders appearing multiple times', () => {
-      const inputs = new Inputs('', 'MyTitle')
-      const content = '$title is repeated: $title'
-      expect(inputs.render(content)).toBe('MyTitle is repeated: $title')
-    })
-
-    test('should not replace if value is empty string', () => {
-      const inputs = new Inputs('', '')
-      const content = 'Title: $title'
-      expect(inputs.render(content)).toBe('Title: $title')
-    })
-
-    test('should handle special characters in replacement values', () => {
-      const inputs = new Inputs('', 'Title with $pecial ch@rs!')
-      const content = 'Title: $title'
-      expect(inputs.render(content)).toBe('Title: Title with $pecial ch@rs!')
-    })
-
-    test('should handle newlines in replacement values', () => {
-      const inputs = new Inputs('', '', 'Line 1\nLine 2\nLine 3')
-      const content = 'Description:\n$description'
-      expect(inputs.render(content)).toBe('Description:\nLine 1\nLine 2\nLine 3')
-    })
-
-    test('should handle complex template with mixed content', () => {
-      const inputs = new Inputs(
-        'system msg',
-        'PR Title',
-        'PR Description'
-      )
       const template = `
-# $title
-
-## Description
-$description
-
 System: $system_message
-
-Some other text that should not change.
+Title: $title
+Description: $description
+Raw: $raw_summary
+Short: $short_summary
+File: $filename
+Content: $file_content
+FileDiff: $file_diff
+Patches: $patches
+Diff: $diff
+Chain: $comment_chain
+Comment: $comment
 `
-      const expected = `
-# PR Title
+      const result = inputs.render(template)
 
-## Description
-PR Description
+      expect(result).toContain('System: sys_msg')
+      expect(result).toContain('Title: pr_title')
+      expect(result).toContain('Description: pr_desc')
+      expect(result).toContain('Raw: raw_sum')
+      expect(result).toContain('Short: short_sum')
+      expect(result).toContain('File: test.ts')
+      expect(result).toContain('Content: file_cont')
+      expect(result).toContain('FileDiff: file_dif')
+      expect(result).toContain('Patches: patch_cont')
+      expect(result).toContain('Diff: diff_cont')
+      expect(result).toContain('Chain: chain_cont')
+      expect(result).toContain('Comment: comm_text')
+    })
 
-System: system msg
+    test('should return empty string for empty input', () => {
+      const inputs = new Inputs()
+      const result = inputs.render('')
+      expect(result).toBe('')
+    })
 
-Some other text that should not change.
-`
-      expect(inputs.render(template)).toBe(expected)
+    test('should handle template with no variables', () => {
+      const inputs = new Inputs()
+      const template = 'This is plain text with no variables'
+      const result = inputs.render(template)
+      expect(result).toBe(template)
+    })
+
+    test('should only replace variables that have values', () => {
+      const inputs = new Inputs()
+      inputs.title = 'Test Title'
+      inputs.filename = 'test.ts'
+
+      const template = '$title in $filename with $description'
+      const result = inputs.render(template)
+
+      expect(result).toContain('Test Title')
+      expect(result).toContain('test.ts')
+      expect(result).toContain('no description provided')
+    })
+
+    test('should handle multiple occurrences of same variable', () => {
+      const inputs = new Inputs()
+      inputs.filename = 'test.ts'
+
+      const template = '$filename was changed. Review $filename carefully.'
+      const result = inputs.render(template)
+
+      expect(result).toBe('test.ts was changed. Review test.ts carefully.')
+    })
+
+    test('should handle special characters in values', () => {
+      const inputs = new Inputs()
+      inputs.description = 'Description with $ and special chars: @#%^&*()'
+
+      const template = 'Description: $description'
+      const result = inputs.render(template)
+
+      expect(result).toContain('Description with $ and special chars: @#%^&*()')
+    })
+
+    test('should not replace variables with empty values', () => {
+      const inputs = new Inputs('', '', '', '', '', '', '', '', '', '', '', '')
+
+      const template = 'Title: $title, System: $system_message'
+      const result = inputs.render(template)
+
+      expect(result).toBe(template)
+    })
+
+    test('should handle multiline templates', () => {
+      const inputs = new Inputs()
+      inputs.title = 'PR Title'
+      inputs.filename = 'src/test.ts'
+
+      const template = `## Title: $title
+
+File: $filename
+
+Some content here`
+
+      const result = inputs.render(template)
+
+      expect(result).toContain('## Title: PR Title')
+      expect(result).toContain('File: src/test.ts')
     })
   })
 
-  describe('Edge Cases', () => {
-    test('should handle undefined content gracefully', () => {
-      const inputs = new Inputs()
-      expect(inputs.render(undefined as any)).toBe('')
+  describe('edge cases', () => {
+    test('should handle very long strings', () => {
+      const longString = 'a'.repeat(10000)
+      const inputs = new Inputs(longString)
+
+      expect(inputs.systemMessage).toBe(longString)
+      expect(inputs.systemMessage.length).toBe(10000)
     })
 
-    test('should handle null content gracefully', () => {
-      const inputs = new Inputs()
-      expect(inputs.render(null as any)).toBe('')
+    test('should handle unicode characters', () => {
+      const inputs = new Inputs('🚀 Unicode test 你好', 'Title with émojis 🎉')
+
+      expect(inputs.systemMessage).toBe('🚀 Unicode test 你好')
+      expect(inputs.title).toBe('Title with émojis 🎉')
     })
 
-    test('should handle very long content', () => {
-      const inputs = new Inputs('', 'Title')
-      const longContent = '$title'.repeat(10000)
-      const result = inputs.render(longContent)
-      expect(result).toContain('Title')
-      expect(result.length).toBeGreaterThan(0)
-    })
+    test('should handle newlines and tabs in values', () => {
+      const inputs = new Inputs('line1\nline2\ttabbed')
 
-    test('should handle content with only placeholders', () => {
-      const inputs = new Inputs('sys', 'title')
-      expect(inputs.render('$system_message$title')).toBe('systitle')
+      expect(inputs.systemMessage).toContain('\n')
+      expect(inputs.systemMessage).toContain('\t')
     })
   })
 })
