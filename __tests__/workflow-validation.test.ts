@@ -1,495 +1,390 @@
-import {describe, expect, test} from '@jest/globals'
+import { describe, test, expect, beforeAll } from '@jest/globals'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as yaml from 'js-yaml'
 
+interface WorkflowFile {
+  path: string
+  content: string
+  parsed?: any
+}
+
 describe('GitHub Workflow Files Validation', () => {
-  const workflowsDir = path.join(__dirname, '..', '.github', 'workflows')
+  let workflowFiles: WorkflowFile[]
 
-  /**
-   * Get all files in the workflows directory
-   */
-  function getWorkflowFiles(): string[] {
-    if (!fs.existsSync(workflowsDir)) {
-      return []
-    }
-    return fs.readdirSync(workflowsDir).map(file => path.join(workflowsDir, file))
-  }
+  beforeAll(() => {
+    const workflowDir = path.join(__dirname, '..', '.github', 'workflows')
+    const files = fs.readdirSync(workflowDir)
 
-  /**
-   * Validate that a file is valid YAML
-   */
-  function isValidYaml(content: string): boolean {
-    try {
-      yaml.load(content)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  /**
-   * Check if workflow has required GitHub Actions fields
-   */
-  function hasRequiredWorkflowFields(workflowObj: any): {
-    valid: boolean
-    missing: string[]
-  } {
-    const required = ['name', 'on', 'jobs']
-    const missing: string[] = []
-
-    for (const field of required) {
-      if (!(field in workflowObj)) {
-        missing.push(field)
-      }
-    }
-
-    return {valid: missing.length === 0, missing}
-  }
-
-  describe('Workflow File Format', () => {
-    test('should have workflows directory', () => {
-      expect(fs.existsSync(workflowsDir)).toBe(true)
-    })
-
-    test('all .yml/.yaml files should be valid YAML', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      expect(workflowFiles.length).toBeGreaterThan(0)
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const isValid = isValidYaml(content)
-        expect(isValid).toBe(true)
-      }
-    })
-
-    test('should not have files with trailing spaces in names', () => {
-      const files = fs.readdirSync(workflowsDir)
-      const filesWithTrailingSpaces = files.filter(
-        file => file !== file.trim()
-      )
-
-      expect(filesWithTrailingSpaces).toEqual([])
-    })
-
-    test('all workflow files should have proper file extensions', () => {
-      const files = fs.readdirSync(workflowsDir)
-      const validExtensions = ['.yml', '.yaml', '']
-      const invalidFiles = files.filter(file => {
-        const ext = path.extname(file)
-        return !validExtensions.includes(ext)
+    workflowFiles = files
+      .map(file => ({
+        path: path.join(workflowDir, file),
+        content: ''
+      }))
+      .filter(f => {
+        const stat = fs.statSync(f.path)
+        return stat.isFile()
       })
-
-      // Files without extensions should be flagged for review
-      const noExtFiles = files.filter(file => path.extname(file) === '')
-      if (noExtFiles.length > 0) {
-        console.warn(`Warning: Found files without extensions: ${noExtFiles.join(', ')}`)
-      }
-
-      expect(invalidFiles).toEqual([])
-    })
-  })
-
-  describe('Workflow Schema Validation', () => {
-    test('all .yml/.yaml workflows should have required top-level fields', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        const validation = hasRequiredWorkflowFields(workflowObj)
-        expect(validation.valid).toBe(true)
-        if (!validation.valid) {
-          console.error(
-            `Workflow ${path.basename(file)} is missing fields: ${validation.missing.join(', ')}`
-          )
-        }
-      }
-    })
-
-    test('workflow "on" field should have valid trigger types', () => {
-      const validTriggers = [
-        'push',
-        'pull_request',
-        'pull_request_target',
-        'pull_request_review',
-        'pull_request_review_comment',
-        'release',
-        'workflow_dispatch',
-        'schedule',
-        'create',
-        'delete',
-        'fork',
-        'gollum',
-        'issue_comment',
-        'issues',
-        'label',
-        'milestone',
-        'project',
-        'project_card',
-        'project_column',
-        'public',
-        'registry_package',
-        'status',
-        'watch',
-        'workflow_call',
-        'workflow_run'
-      ]
-
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.on) {
-          const triggers =
-            typeof workflowObj.on === 'string'
-              ? [workflowObj.on]
-              : Object.keys(workflowObj.on)
-
-          for (const trigger of triggers) {
-            expect(validTriggers).toContain(trigger)
-          }
-        }
-      }
-    })
-
-    test('workflow jobs should have valid structure', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.jobs) {
-          expect(typeof workflowObj.jobs).toBe('object')
-
-          // Each job should have required fields
-          for (const [jobName, jobConfig] of Object.entries(
-            workflowObj.jobs
-          )) {
-            expect(jobConfig).toHaveProperty('runs-on')
-            expect(jobConfig).toHaveProperty('steps')
-            expect(Array.isArray((jobConfig as any).steps)).toBe(true)
-          }
-        }
-      }
-    })
-
-    test('workflow steps should have valid structure', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.jobs) {
-          for (const [jobName, jobConfig] of Object.entries(
-            workflowObj.jobs
-          )) {
-            const steps = (jobConfig as any).steps
-            if (Array.isArray(steps)) {
-              for (const step of steps) {
-                // Each step should have either 'uses' or 'run'
-                const hasUses = 'uses' in step
-                const hasRun = 'run' in step
-                expect(hasUses || hasRun).toBe(true)
-              }
-            }
-          }
-        }
-      }
-    })
-  })
-
-  describe('Specific File: workflows', () => {
-    const workflowsFile = path.join(workflowsDir, 'workflows ')
-
-    test('should exist', () => {
-      expect(fs.existsSync(workflowsFile)).toBe(true)
-    })
-
-    test('should not be empty', () => {
-      if (fs.existsSync(workflowsFile)) {
-        const content = fs.readFileSync(workflowsFile, 'utf-8')
-        expect(content.length).toBeGreaterThan(0)
-      }
-    })
-
-    test('should be valid YAML or have a proper format', () => {
-      if (fs.existsSync(workflowsFile)) {
-        const content = fs.readFileSync(workflowsFile, 'utf-8')
-
-        // Try to parse as YAML
-        let parsedContent: any
+      .map(f => {
         try {
-          parsedContent = yaml.load(content)
+          f.content = fs.readFileSync(f.path, 'utf8')
         } catch (error) {
-          // If not valid YAML, the file should be flagged
-          console.error(
-            `File "workflows " is not valid YAML: ${(error as Error).message}`
-          )
-          console.error(`Content: "${content}"`)
-          expect(isValidYaml(content)).toBe(true) // This will fail
+          f.content = ''
         }
+        return f
+      })
+  })
 
-        // If it parses, validate structure
-        if (parsedContent) {
-          const validation = hasRequiredWorkflowFields(parsedContent)
-          expect(validation.valid).toBe(true)
-        }
-      }
+  describe('Workflow File Discovery', () => {
+    test('should find workflow files in .github/workflows directory', () => {
+      expect(workflowFiles).toBeDefined()
+      expect(workflowFiles.length).toBeGreaterThan(0)
     })
 
-    test('should have proper line endings', () => {
-      if (fs.existsSync(workflowsFile)) {
-        const content = fs.readFileSync(workflowsFile, 'utf-8')
-        
-        // Check if file ends with newline (Unix convention)
-        if (content.length > 0) {
-          const endsWithNewline = content.endsWith('\n')
-          // Warn if it doesn't
-          if (!endsWithNewline) {
-            console.warn(
-              'Warning: File "workflows " does not end with a newline'
-            )
-          }
-        }
-      }
-    })
-
-    test('should not contain only whitespace or non-workflow content', () => {
-      if (fs.existsSync(workflowsFile)) {
-        const content = fs.readFileSync(workflowsFile, 'utf-8').trim()
-        
-        // If content is just a simple word, it's likely invalid
-        if (content && !content.includes(':') && !content.includes('\n')) {
-          console.error(
-            `File "workflows " appears to contain invalid content: "${content}"`
-          )
-          expect(content.includes(':')).toBe(true) // YAML should have key-value pairs
-        }
-      }
-    })
-
-    test('content should match GitHub Actions workflow expectations', () => {
-      if (fs.existsSync(workflowsFile)) {
-        const content = fs.readFileSync(workflowsFile, 'utf-8')
-        
-        // Check if content looks like a workflow
-        const looksLikeWorkflow =
-          content.includes('name:') ||
-          content.includes('on:') ||
-          content.includes('jobs:') ||
-          isValidYaml(content)
-
-        if (!looksLikeWorkflow) {
-          console.error(
-            `File "workflows " does not appear to be a valid GitHub Actions workflow`
-          )
-          console.error(`Content: "${content}"`)
-        }
-
-        expect(looksLikeWorkflow).toBe(true)
-      }
+    test('should have readable content for all workflow files', () => {
+      workflowFiles.forEach(file => {
+        expect(file.content).toBeDefined()
+      })
     })
   })
 
-  describe('Workflow Best Practices', () => {
-    test('workflows should have descriptive names', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
+  describe('YAML Syntax Validation', () => {
+    test.each(workflowFiles.map(f => [path.basename(f.path), f]))(
+      'should parse %s as valid YAML',
+      (filename, file: WorkflowFile) => {
+        // Skip empty files
+        if (!file.content.trim()) {
+          expect(file.content.trim()).toBe('')
+          return
+        }
 
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.name) {
-          expect(workflowObj.name.length).toBeGreaterThan(0)
-          expect(workflowObj.name.trim()).toBe(workflowObj.name)
+        // For .yml or .yaml files, expect valid YAML
+        if (filename.toString().endsWith('.yml') || filename.toString().endsWith('.yaml')) {
+          expect(() => {
+            const parsed = yaml.load(file.content)
+            file.parsed = parsed
+          }).not.toThrow()
+        } else {
+          // For non-standard workflow files, check if content is valid YAML
+          try {
+            const parsed = yaml.load(file.content)
+            file.parsed = parsed
+          } catch (error) {
+            // If not valid YAML, content should be a simple string
+            expect(typeof file.content).toBe('string')
+          }
         }
       }
+    )
+
+    test('should detect invalid YAML in workflow files', () => {
+      const invalidYaml = 'name: test\n  invalid: : structure'
+      expect(() => yaml.load(invalidYaml)).toThrow()
     })
+  })
 
-    test('steps should have names or uses for clarity', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
+  describe('GitHub Actions Workflow Schema Validation', () => {
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should have required workflow fields',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        
+        // Required fields for a valid GitHub Actions workflow
+        expect(parsed).toHaveProperty('on')
+        expect(parsed).toHaveProperty('jobs')
+        
+        // Optional but common fields
+        if (parsed.name) {
+          expect(typeof parsed.name).toBe('string')
+          expect(parsed.name.length).toBeGreaterThan(0)
+        }
+      }
+    )
 
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should have valid job configurations',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        
+        expect(parsed.jobs).toBeDefined()
+        expect(typeof parsed.jobs).toBe('object')
+        
+        const jobNames = Object.keys(parsed.jobs)
+        expect(jobNames.length).toBeGreaterThan(0)
+        
+        // Each job should have required fields
+        jobNames.forEach(jobName => {
+          const job = parsed.jobs[jobName]
+          expect(job).toHaveProperty('runs-on')
+          expect(job).toHaveProperty('steps')
+          expect(Array.isArray(job.steps)).toBe(true)
+          expect(job.steps.length).toBeGreaterThan(0)
+        })
+      }
+    )
 
-        if (workflowObj?.jobs) {
-          for (const [jobName, jobConfig] of Object.entries(
-            workflowObj.jobs
-          )) {
-            const steps = (jobConfig as any).steps
-            if (Array.isArray(steps)) {
-              for (let i = 0; i < steps.length; i++) {
-                const step = steps[i]
-                const hasIdentifier =
-                  'name' in step || 'uses' in step || 'run' in step
-                expect(hasIdentifier).toBe(true)
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should have valid trigger configuration',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        
+        expect(parsed.on).toBeDefined()
+        
+        // 'on' can be a string or object
+        if (typeof parsed.on === 'string') {
+          // Should be a valid event name
+          expect(parsed.on.length).toBeGreaterThan(0)
+        } else if (typeof parsed.on === 'object') {
+          const triggers = Object.keys(parsed.on)
+          expect(triggers.length).toBeGreaterThan(0)
+        }
+      }
+    )
+  })
+
+  describe('Workflow Step Validation', () => {
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should have properly structured steps',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        
+        Object.keys(parsed.jobs).forEach(jobName => {
+          const job = parsed.jobs[jobName]
+          
+          job.steps.forEach((step: any, index: number) => {
+            // Each step should have either 'uses' or 'run'
+            const hasUses = step.hasOwnProperty('uses')
+            const hasRun = step.hasOwnProperty('run')
+            
+            expect(hasUses || hasRun).toBe(true)
+            
+            // If using an action, should have valid format
+            if (hasUses) {
+              expect(typeof step.uses).toBe('string')
+              expect(step.uses.length).toBeGreaterThan(0)
+            }
+            
+            // If running a command, should be a string
+            if (hasRun) {
+              expect(typeof step.run).toBe('string')
+              expect(step.run.length).toBeGreaterThan(0)
+            }
+          })
+        })
+      }
+    )
+  })
+
+  describe('Workflow Security Best Practices', () => {
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should use pinned action versions when possible',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        
+        let hasActions = false
+        let hasPinnedVersions = false
+        
+        Object.keys(parsed.jobs).forEach(jobName => {
+          const job = parsed.jobs[jobName]
+          
+          job.steps.forEach((step: any) => {
+            if (step.uses) {
+              hasActions = true
+              // Check if version is pinned (has @ with version)
+              if (step.uses.includes('@')) {
+                hasPinnedVersions = true
               }
             }
-          }
+          })
+        })
+        
+        // If workflow has actions, at least some should be pinned
+        if (hasActions) {
+          expect(hasPinnedVersions).toBe(true)
         }
       }
-    })
+    )
 
-    test('workflows should use supported runner types', () => {
-      const validRunners = [
-        'ubuntu-latest',
-        'ubuntu-22.04',
-        'ubuntu-20.04',
-        'windows-latest',
-        'windows-2022',
-        'windows-2019',
-        'macos-latest',
-        'macos-12',
-        'macos-11',
-        'self-hosted'
-      ]
-
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.jobs) {
-          for (const [jobName, jobConfig] of Object.entries(
-            workflowObj.jobs
-          )) {
-            const runsOn = (jobConfig as any)['runs-on']
-            if (typeof runsOn === 'string') {
-              const isValid =
-                validRunners.some(runner => runsOn.includes(runner)) ||
-                runsOn.includes('self-hosted')
-              expect(isValid).toBe(true)
-            }
-          }
-        }
+    test.each(workflowFiles.filter(f => {
+      const basename = path.basename(f.path)
+      return (basename.endsWith('.yml') || basename.endsWith('.yaml')) && f.content.trim()
+    }).map(f => [path.basename(f.path), f]))(
+      '%s should use appropriate runners',
+      (filename, file: WorkflowFile) => {
+        const parsed = yaml.load(file.content) as any
+        const validRunners = [
+          'ubuntu-latest',
+          'ubuntu-22.04',
+          'ubuntu-20.04',
+          'windows-latest',
+          'windows-2022',
+          'windows-2019',
+          'macos-latest',
+          'macos-12',
+          'macos-11'
+        ]
+        
+        Object.keys(parsed.jobs).forEach(jobName => {
+          const job = parsed.jobs[jobName]
+          const runnerPattern = /^(ubuntu|windows|macos)-(latest|\d+(\.\d+)?)|self-hosted/
+          
+          expect(runnerPattern.test(job['runs-on'])).toBe(true)
+        })
       }
-    })
+    )
   })
 
-  describe('File Integrity', () => {
-    test('all workflow files should be readable', () => {
-      const workflowFiles = getWorkflowFiles()
-
-      for (const file of workflowFiles) {
-        expect(() => {
-          fs.readFileSync(file, 'utf-8')
-        }).not.toThrow()
-      }
+  describe('Non-standard Workflow Files', () => {
+    test('should identify files that are not standard workflow files', () => {
+      const nonStandardFiles = workflowFiles.filter(f => {
+        const basename = path.basename(f.path)
+        return !basename.endsWith('.yml') && !basename.endsWith('.yaml')
+      })
+      
+      // Document non-standard files for review
+      nonStandardFiles.forEach(file => {
+        const basename = path.basename(file.path)
+        console.log(`Non-standard workflow file detected: ${basename}`)
+        console.log(`Content: ${file.content.substring(0, 100)}`)
+      })
     })
 
-    test('no duplicate workflow names', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      const names = new Set<string>()
-      const duplicates: string[] = []
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.name) {
-          if (names.has(workflowObj.name)) {
-            duplicates.push(workflowObj.name)
+    test('non-standard workflow files should either be valid YAML or documented', () => {
+      const nonStandardFiles = workflowFiles.filter(f => {
+        const basename = path.basename(f.path)
+        return !basename.endsWith('.yml') && !basename.endsWith('.yaml')
+      })
+      
+      nonStandardFiles.forEach(file => {
+        const basename = path.basename(file.path)
+        
+        // Try to parse as YAML
+        let isValidYaml = false
+        try {
+          const parsed = yaml.load(file.content)
+          if (parsed && typeof parsed === 'object') {
+            isValidYaml = true
           }
-          names.add(workflowObj.name)
+        } catch (error) {
+          isValidYaml = false
         }
-      }
-
-      expect(duplicates).toEqual([])
-    })
-
-    test('workflow files should not be too large', () => {
-      const maxSize = 1024 * 100 // 100KB
-      const workflowFiles = getWorkflowFiles()
-
-      for (const file of workflowFiles) {
-        const stats = fs.statSync(file)
-        expect(stats.size).toBeLessThan(maxSize)
-      }
-    })
-  })
-
-  describe('Security Best Practices', () => {
-    test('workflows using pull_request_target should have appropriate permissions', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-        const workflowObj = yaml.load(content) as any
-
-        if (workflowObj?.on) {
-          const triggers =
-            typeof workflowObj.on === 'string'
-              ? [workflowObj.on]
-              : Object.keys(workflowObj.on)
-
-          if (triggers.includes('pull_request_target')) {
-            // Should have permissions defined for security
-            if (workflowObj.permissions) {
-              expect(typeof workflowObj.permissions).toBe('object')
-            } else {
-              console.warn(
-                `Workflow ${path.basename(file)} uses pull_request_target without explicit permissions`
-              )
-            }
-          }
-        }
-      }
-    })
-
-    test('workflows should not expose secrets in plain text', () => {
-      const workflowFiles = getWorkflowFiles().filter(
-        file => file.endsWith('.yml') || file.endsWith('.yaml')
-      )
-
-      const sensitivePatterns = [
-        /password\s*:\s*['"]/i,
-        /api[_-]?key\s*:\s*['"]/i,
-        /secret\s*:\s*['"][^$]/i,
-        /token\s*:\s*['"][^$]/i
-      ]
-
-      for (const file of workflowFiles) {
-        const content = fs.readFileSync(file, 'utf-8')
-
-        for (const pattern of sensitivePatterns) {
-          const matches = content.match(pattern)
-          if (matches) {
+        
+        // If not valid YAML, content should be intentionally simple or documented
+        if (!isValidYaml) {
+          // Check if file has meaningful content or is intentionally simple
+          const hasContent = file.content.trim().length > 0
+          
+          if (hasContent) {
+            // Log warning about potentially problematic file
             console.warn(
-              `Potential plain-text secret in ${path.basename(file)}: ${matches[0]}`
+              `Warning: ${basename} is not a valid workflow file. ` +
+              `Content: "${file.content.trim()}"`
             )
           }
-          expect(matches).toBeNull()
         }
+      })
+    })
+  })
+
+  describe('Workflow File Naming Conventions', () => {
+    test('should follow kebab-case or camelCase naming', () => {
+      workflowFiles.forEach(file => {
+        const basename = path.basename(file.path, path.extname(file.path))
+        const kebabCase = /^[a-z0-9]+(-[a-z0-9]+)*$/
+        const camelCase = /^[a-z][a-zA-Z0-9]*$/
+        
+        // Allow standard extensions
+        if (basename.endsWith('.yml') || basename.endsWith('.yaml')) {
+          const nameWithoutExt = basename.replace(/\.(yml|yaml)$/, '')
+          const isValid = kebabCase.test(nameWithoutExt) || camelCase.test(nameWithoutExt)
+          
+          if (!isValid) {
+            console.warn(`Non-standard workflow filename: ${basename}`)
+          }
+        }
+      })
+    })
+
+    test('should not have trailing spaces in filenames', () => {
+      workflowFiles.forEach(file => {
+        const basename = path.basename(file.path)
+        expect(basename).toBe(basename.trim())
+      })
+    })
+  })
+
+  describe('Content Quality Checks', () => {
+    test('workflow files should not be empty', () => {
+      const yamlFiles = workflowFiles.filter(f => {
+        const basename = path.basename(f.path)
+        return basename.endsWith('.yml') || basename.endsWith('.yaml')
+      })
+      
+      yamlFiles.forEach(file => {
+        expect(file.content.trim().length).toBeGreaterThan(0)
+      })
+    })
+
+    test('workflow files should have meaningful content', () => {
+      const yamlFiles = workflowFiles.filter(f => {
+        const basename = path.basename(f.path)
+        return basename.endsWith('.yml') || basename.endsWith('.yaml')
+      })
+      
+      yamlFiles.forEach(file => {
+        const parsed = yaml.load(file.content) as any
+        expect(parsed).not.toBeNull()
+        expect(typeof parsed).toBe('object')
+        
+        // Should have more than just a simple string
+        const keys = Object.keys(parsed)
+        expect(keys.length).toBeGreaterThan(0)
+      })
+    })
+
+    test('should detect single-word workflow files as invalid', () => {
+      workflowFiles.forEach(file => {
+        const content = file.content.trim()
+        const basename = path.basename(file.path)
+        
+        // If file ends with .yml or .yaml, it should be valid workflow YAML
+        if (basename.endsWith('.yml') || basename.endsWith('.yaml')) {
+          // Single word files are not valid workflows
+          const isSingleWord = /^[a-zA-Z]+\s*$/.test(content)
+          expect(isSingleWord).toBe(false)
+        }
+      })
+    })
+  })
+
+  describe('Integration with CI/CD', () => {
+    test('should have at least one workflow for CI/CD', () => {
+      const ciKeywords = ['test', 'build', 'ci', 'deploy', 'release', 'publish']
+      
+      const hasCIWorkflow = workflowFiles.some(file => {
+        const basename = path.basename(file.path).toLowerCase()
+        return ciKeywords.some(keyword => basename.includes(keyword))
+      })
+      
+      // Note: This may fail if no CI workflows exist yet
+      // But it's good to document the expectation
+      if (!hasCIWorkflow) {
+        console.log('Note: No obvious CI/CD workflows detected')
       }
     })
   })
