@@ -1018,3 +1018,4 @@ ${review.comment}`
 
   return reviews
 }
+export { splitPatch, patchStartEndLine, parsePatch, parseReview }
